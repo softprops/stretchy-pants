@@ -73,16 +73,16 @@ case class Client(host: String) {
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-get.html */
   def get(
     index: String,
-    kind: String,
-    id: String,
-    realtime: Boolean       = true,
-    source: Boolean         = true,
-    include: Option[String] = None,
-    exclude: Option[String] = None,
-    routing: Option[String] = None,
-    preference: Option[Preference] = None,
-    refresh: Boolean        = false,
-    fields: Seq[String]     = Seq.empty[String]) =
+    kind: String)
+    (id: String,
+     realtime: Boolean       = true,
+     source: Boolean         = true,
+     include: Option[String] = None,
+     exclude: Option[String] = None,
+     routing: Option[String] = None,
+     preference: Option[Preference] = None,
+     refresh: Boolean        = false,
+     fields: Seq[String]     = Seq.empty[String]) =
     (root / index / kind / id <<? Map.empty[String, String] ++
      Some("false").filter(Function.const(!realtime)).map("realtime" -> _) ++
      Some("false").filter(Function.const(!source)).map("_source" -> _) ++
@@ -96,15 +96,15 @@ case class Client(host: String) {
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete.html */
   def delete(
     index: String,
-    kind: String,
-    id: String,
-    version: Option[String] = None,
-    routing: Option[String] = None,
-    parent: Option[String] = None,
-    replication: Option[Replication] = None,
-    consistency: Option[Consistency] = None,
-    refresh: Boolean = false,
-    timeout: Option[FiniteDuration] = None) =
+    kind: String)
+    (id: String,
+     version: Option[String] = None,
+     routing: Option[String] = None,
+     parent: Option[String] = None,
+     replication: Option[Replication] = None,
+     consistency: Option[Consistency] = None,
+     refresh: Boolean = false,
+     timeout: Option[FiniteDuration] = None) =
     (root.DELETE / index / kind / id <<? Map.empty[String, String] ++
      version.map("version" -> _) ++
      routing.map("routing" -> _) ++
