@@ -2,6 +2,10 @@ package stretchypants
 
 import dispatch.url
 import scala.concurrent.duration.FiniteDuration
+import org.json4s._
+import org.json4s.JsonDSL._
+import org.json4s.native.Printer.compact
+import org.json4s.native.JsonMethods.render
 
 case class Client(host: String) {
   sealed trait Consistency {
@@ -32,6 +36,8 @@ case class Client(host: String) {
     case object Async extends Value("async")
     case object Sync extends Value("sync")
   }
+
+  case class Script(src: String, params: Map[String, String])
 
   private[this] def root = url(host)
 
@@ -107,4 +113,12 @@ case class Client(host: String) {
      consistency.map("consistency" -> _.value) ++
      Some("false").filter(Function.const(!refresh)).map("refresh" -> _) ++
      timeout.map("timeout" -> _.length.toString))
+
+  def update(
+    index: String, kind: String)
+    (id: String,
+     script: Option[Script] = None) =
+    (root.POST / index / kind / id / "_update"
+     << compact(render(
+       script.map( s => ("script" -> s.src) ~ ("params" -> s.params)).getOrElse(JNothing))))
 }
