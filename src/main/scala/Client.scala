@@ -114,6 +114,7 @@ case class Client(host: String) {
      Some("false").filter(Function.const(!refresh)).map("refresh" -> _) ++
      timeout.map("timeout" -> _.length.toString))
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-update.html */
   def update(
     index: String, kind: String)
     (id: String,
