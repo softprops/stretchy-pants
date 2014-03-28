@@ -24,6 +24,15 @@ case class Client(host: String) {
     case class Custom(val value: String) extends Preference
   }
 
+  sealed trait Replication {
+    def value: String
+  }
+  object Replication {
+    abstract class Value(val value: String) extends Replication
+    case object Async extends Value("async")
+    case object Sync extends Value("sync")
+  }
+
   private[this] def root = url(host)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-index_.html */
@@ -77,4 +86,25 @@ case class Client(host: String) {
      routing.map("routing" -> _) ++
      preference.map("preference" -> _.value) ++
      Some("true").filter(Function.const(refresh)).map("refresh" -> _))
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete.html */
+  def delete(
+    index: String,
+    kind: String,
+    id: String,
+    version: Option[String] = None,
+    routing: Option[String] = None,
+    parent: Option[String] = None,
+    replication: Option[Replication] = None,
+    consistency: Option[Consistency] = None,
+    refresh: Boolean = false,
+    timeout: Option[FiniteDuration] = None) =
+    (root.DELETE / index / kind / id <<? Map.empty[String, String] ++
+     version.map("version" -> _) ++
+     routing.map("routing" -> _) ++
+     parent.map("_parent" -> _) ++
+     replication.map("replication" -> _.value) ++
+     consistency.map("consistency" -> _.value) ++
+     Some("false").filter(Function.const(!refresh)).map("refresh" -> _) ++
+     timeout.map("timeout" -> _.length.toString))
 }
