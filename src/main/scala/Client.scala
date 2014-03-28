@@ -53,7 +53,7 @@ case class Client(host: String) {
      ttl: Option[FiniteDuration]      = None,
      consistency: Option[Consistency] = None,
      timeout: Option[FiniteDuration] = None,
-     asyncReplication: Boolean = false,
+     replication: Option[Replication] = None,
      refresh: Boolean          = false,
      create: Boolean           = false) =
     (id.map(root / kind / _).getOrElse(root / kind).PUT
@@ -65,7 +65,7 @@ case class Client(host: String) {
           timestamp.map("timestamp" -> _) ++
           ttl.map("ttl" -> _.length.toString) ++
           consistency.map("consistency" -> _.value) ++
-          Some("async").filter(Function.const(asyncReplication)).map("replication" -> _) ++
+          replication.map("replication" -> _.value) ++
           Some("true").filter(Function.const(refresh)).map("refresh" -> _) ++
           timeout.map("timeout" -> _.length.toString)
       << doc)
