@@ -206,6 +206,7 @@ case class Client(host: String) {
    //def multiTermVector(docs: Seq[TermVector]) =
    //  (root.POST / "_mtermvectors" << compact(render("docs" -> docs.map())))
 
+   /** q is expected to be in the form field:value or just value with df=field */
    def uriSearch
      (index: String*)
      (kind: String*)
@@ -253,4 +254,31 @@ case class Client(host: String) {
         routing.map("routing" -> _)
         )
      }
+
+  def search
+    (index: String, kind: String)
+    (term: (String, String),
+     timeout: Option[FiniteDuration] = None,
+     from: Option[Long]              = None,
+     size: Option[Int]               = None,
+     searchType: Option[SearchType]  = None,
+     sort: Seq[Sort]                 = Seq.empty[Sort],
+     trackScores: Option[Boolean]    = None,
+     // todo partial source
+     source: Option[Boolean]         = None) =
+    (root.POST / index / kind / "_search"
+     <<? Map.empty[String, String] ++
+       timeout.map("timeout" -> _.length.toString) ++
+       searchType.map("search_type" -> _.value)
+     << compact(render(
+       ("_source" -> source) ~
+       ("from" -> from) ~
+       ("size" -> size) ~
+       ("track_scores" -> trackScores) ~
+       ("sort" -> Some(sort).filter(_.nonEmpty).map {
+         _.map { sort =>
+           (sort.field -> ("order" -> sort.order.map(_.value)))
+         }
+       }) ~
+       ("query" -> ("term" -> (term._1 -> term._2))))))
 }
