@@ -265,12 +265,17 @@ case class Client(host: String) {
      sort: Seq[Sort]                 = Seq.empty[Sort],
      trackScores: Option[Boolean]    = None,
      // todo partial source
-     source: Option[Boolean]         = None) =
+     source: Option[Boolean]         = None,
+     // todo script fields
+     // todo fielddata_fields
+     fields: Option[Seq[String]]     = None,
+     postFilter: Option[(String, String)] = None) =
     (root.POST / index / kind / "_search"
      <<? Map.empty[String, String] ++
        timeout.map("timeout" -> _.length.toString) ++
        searchType.map("search_type" -> _.value)
      << compact(render(
+       ("fields" -> fields) ~
        ("_source" -> source) ~
        ("from" -> from) ~
        ("size" -> size) ~
@@ -280,5 +285,8 @@ case class Client(host: String) {
            (sort.field -> ("order" -> sort.order.map(_.value)))
          }
        }) ~
-       ("query" -> ("term" -> (term._1 -> term._2))))))
+       ("query" -> ("term" -> (term._1 -> term._2))) ~
+       ("post_filter" -> postFilter.map { pf =>
+         ("term" -> (pf._1 -> pf._2))
+        }))))
 }
