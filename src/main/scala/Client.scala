@@ -1,6 +1,8 @@
 package stretchypants
 
-import dispatch.url
+import com.ning.http.client.AsyncHandler
+import dispatch.{ url, Req, Http }
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration.FiniteDuration
 import org.json4s._
 import org.json4s.JsonDSL._
@@ -12,119 +14,119 @@ case class Script(
   params: Map[String, String] = Map.empty[String, String],
   lang: Option[String] = None)
 
-/*sealed trait Action
-object Action {
-  abstract class Value(
-    def name: String
-  )
-  case class Index(
-    index: String,
-    kind: String,
-    doc: String,
-    id: Option[String] = None,
-    refresh: Option[Boolean] = None,
-    consistency: Option[Consistency] = None,
-    ttl: Option[FiniteDuration] = None,
-    timestamp: Option[Long] = None,
-    parent: Option[String]  = None,
-    routing: Option[String] = None,
-    version: Option[Int]    = None) extends Value("index")
-  case class Create(
-    index: String,
-    kind: String,
-    doc: String,
-    id: Option[String] = None,
-    refresh: Option[Boolean] = None,
-    consistency: Option[Consistency] = None,
-    ttl: Option[FiniteDuration] = None,
-    timestamp: Option[Long] = None,
-    parent: Option[String]  = None,
-    routing: Option[String] = None,
-    version: Option[Int]    = None) extends Value("create")
-  case class Delete(
-    index: String,
-    kind: String,
-    id: String,
-    refresh: Option[Boolean] = None,
-    consistency: Option[Consistency] = None,
-    ttl: Option[FiniteDuration] = None,
-    timestamp: Option[Long] = None,
-    parent: Option[String]  = None,
-    routing: Option[String] = None,
-    version: Option[Int]    = None) extends Value("delete")
-  case class Update(
-    index: String,
-    kind: String,
-    id: String,
-    doc: String,
-    upsert: Option[String] = None,
-    docAsUpsert: Option[Boolean] = None,
-    script: Option[Script] = None,
-    retryOnConflict: Option[Int] = None,
-    refresh: Option[Boolean] = None,
-    consistency: Option[Consistency] = None,
-    ttl: Option[FiniteDuration] = None,
-    timestamp: Option[Long] = None,
-    parent: Option[String]  = None,
-    routing: Option[String] = None,
-    version: Option[Int]    = None) extends Value("update")
+object Client {
+  type Handler[T] = AsyncHandler[T]
+  val Agent = "StretchyPants/0.1.0-SNAPSHOT"
+  trait Completion {
+    def apply[T](handler: Client.Handler[T])(implicit ec: ExecutionContext): Future[T]
+  }
 }
-*/
 
-case class Client(host: String) {
+case class Client(host: String = "http://0.0.0.0:9200", http: Http = Http) {
   private[this] def root = url(host)
 
+  def request[T](req: Req)(handler: Client.Handler[T])(implicit ec: ExecutionContext): Future[T] =
+    http(req <:< Map("User-Agent" -> Client.Agent) > handler)
+
+  def complete(req: Req): Client.Completion = new Client.Completion {
+    override def apply[T](handler: Client.Handler[T])(implicit ec: ExecutionContext) =
+      request(req)(handler)
+  }
+
+  def refresh() = complete(root.POST / "_refresh")
+
+  def status = complete(root / "_status")
+
+  case class Indexer(
+    index: String, kind: String,
+    _doc: Option[String]       = None,
+    _id: Option[String]        = None,
+    _version: Option[Int]      = None,
+    _routing: Option[String]   = None,
+    _parent: Option[String]    = None,
+    _timestamp: Option[String] = None,
+    _ttl: Option[FiniteDuration]      = None,
+    _consistency: Option[Consistency] = None,
+    _timeout: Option[FiniteDuration] = None,
+    _replication: Option[Replication] = None,
+    _refresh: Boolean          = false,
+    _create: Boolean           = false) {
+    
+    def doc(d: String) = copy(_doc = Some(d))
+    def id(i: String)  = copy(_id = Some(i))
+    def version(v: Int) = copy(_version = Some(v))
+    def routing(r: String) = copy(_routing = Some(r))
+    def parent(p: String) = copy(_parent = Some(p))
+    def timestamp(s: String) = copy(_timestamp = Some(s))
+    def ttl(t: FiniteDuration) = copy(_ttl = Some(t))
+    def consistency(c: Consistency) = copy(_consistency = Some(c))
+    def timeout(to: FiniteDuration) = copy(_timeout = Some(to))
+    def replication(r: Replication) = copy(_replication = Some(r))
+    def refresh(r: Boolean) = copy(_refresh = r)
+    def create(c: Boolean) = copy(_create = c)
+
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+      _doc.map( doc => 
+      request(_id.map(root / index / kind / _).getOrElse(root / index / kind).PUT
+              <<? Map.empty[String, String]  ++
+                _version.map("version" -> _.toString) ++
+                Some("create").filter(Function.const(_create)).map("op_type" -> _) ++
+                _routing.map("routing" -> _) ++
+                _parent.map("parent" -> _) ++
+                _timestamp.map("timestamp" -> _) ++
+                _ttl.map("ttl" -> _.length.toString) ++
+                _consistency.map("consistency" -> _.value) ++
+                _replication.map("replication" -> _.value) ++
+                Some("true").filter(Function.const(_refresh)).map("refresh" -> _) ++
+                _timeout.map("timeout" -> _.length.toString)
+              << doc)(hand)).getOrElse(
+        Future.failed(new IllegalArgumentException("doc is required"))
+      )
+  }
+
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-index_.html */
-  def index(
-    index: String, kind: String)
-    (doc: String,
-     version: Option[Int]      = None,
-     id: Option[String]        = None,
-     routing: Option[String]   = None,
-     parent: Option[String]    = None,
-     timestamp: Option[String] = None,
-     ttl: Option[FiniteDuration]      = None,
-     consistency: Option[Consistency] = None,
-     timeout: Option[FiniteDuration] = None,
-     replication: Option[Replication] = None,
-     refresh: Boolean          = false,
-     create: Boolean           = false) =
-    (id.map(root / kind / _).getOrElse(root / kind).PUT
-      <<? Map.empty[String, String]  ++
-          version.map("version" -> _.toString) ++
-          Some("create").filter(Function.const(create)).map("op_type" -> _) ++
-          routing.map("routing" -> _) ++
-          parent.map("parent" -> _) ++
-          timestamp.map("timestamp" -> _) ++
-          ttl.map("ttl" -> _.length.toString) ++
-          consistency.map("consistency" -> _.value) ++
-          replication.map("replication" -> _.value) ++
-          Some("true").filter(Function.const(refresh)).map("refresh" -> _) ++
-          timeout.map("timeout" -> _.length.toString)
-      << doc)
+  def index(index: String, kind: String) = Indexer(index, kind).doc(_)
+
+  case class Get(
+    index: String, kind: String,
+    _id: Option[String] = None,
+    _realtime: Boolean       = true,
+    _source: Boolean         = true,
+    _include: Option[String] = None,
+    _exclude: Option[String] = None,
+    _routing: Option[String] = None,
+    _preference: Option[Preference] = None,
+    _refresh: Boolean        = false,
+    _fields: Seq[String]     = Seq.empty[String]) {
+
+    def id(i: String) = copy(_id = Some(i))
+    def realtime(rt: Boolean) = copy(_realtime = rt)
+    def source(s: Boolean) = copy(_source = s)
+    def include(incl: String) = copy(_include = Some(incl))
+    def exclude(excl: String) = copy(_exclude = Some(excl))
+    def routing(r: String) = copy(_routing = Some(r))
+    def preference(p: Preference) = copy(_preference = Some(p))
+    def refresh(r: Boolean) = copy(_refresh = r)
+    def fields(fs: String*) = copy(_fields = fs.toList)
+
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+      _id.map( id =>
+        request(root / index / kind / id <<? Map.empty[String, String] ++
+                Some("false").filter(Function.const(!_realtime)).map("realtime" -> _) ++
+                Some("false").filter(Function.const(!_source)).map("_source" -> _) ++
+                _include.map("_source_include" -> _) ++
+                _exclude.map("_source_exclude" -> _) ++
+                Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
+                _routing.map("routing" -> _) ++
+                _preference.map("preference" -> _.value) ++
+                Some("true").filter(Function.const(_refresh)).map("refresh" -> _))(hand)).getOrElse(
+                  Future.failed(new IllegalArgumentException("id is required"))
+                )
+
+  }
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-get.html */
-  def get(
-    index: String,
-    kind: String)
-    (id: String,
-     realtime: Boolean       = true,
-     source: Boolean         = true,
-     include: Option[String] = None,
-     exclude: Option[String] = None,
-     routing: Option[String] = None,
-     preference: Option[Preference] = None,
-     refresh: Boolean        = false,
-     fields: Seq[String]     = Seq.empty[String]) =
-    (root / index / kind / id <<? Map.empty[String, String] ++
-     Some("false").filter(Function.const(!realtime)).map("realtime" -> _) ++
-     Some("false").filter(Function.const(!source)).map("_source" -> _) ++
-     include.map("_source_include" -> _) ++
-     exclude.map("_source_exclude" -> _) ++
-     Some(fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
-     routing.map("routing" -> _) ++
-     preference.map("preference" -> _.value) ++
-     Some("true").filter(Function.const(refresh)).map("refresh" -> _))
+  def get(index: String, kind: String) = Get(index, kind).id(_)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-multi-get.html.
    *  todo: http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-multi-get.html#mget-source-filtering
@@ -132,26 +134,42 @@ case class Client(host: String) {
   def multiGet(index: String, kind: String)(ids: String*) =
     (root.POST / index / kind / "_mget" << compact(render(("ids" -> ids.toList))))
 
+  case class Delete(
+    index: String, kind: String,
+    _id: Option[String]      = None,
+    _version: Option[String] = None,
+    _routing: Option[String] = None,
+    _parent: Option[String]  = None,
+    _replication: Option[Replication] = None,
+    _consistency: Option[Consistency] = None,
+    _refresh: Boolean = false,
+    _timeout: Option[FiniteDuration] = None) {
+
+    def id(i: String) = copy(_id = Some(i))
+    def version(v: String) = copy(_version = Some(v))
+    def routing(r: String) = copy(_routing = Some(r))
+    def parent(p: String) = copy(_parent = Some(p))
+    def replication(r: Replication) = copy(_replication = Some(r))
+    def consistency(c: Consistency) = copy(_consistency = Some(c))
+    def refresh(r: Boolean) = copy(_refresh = r)
+    def timeout(to: FiniteDuration) = copy(_timeout = Some(to))
+
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+      _id.map( id =>
+        request(root.DELETE / index / kind / id <<? Map.empty[String, String] ++
+         _version.map("version" -> _) ++
+         _routing.map("routing" -> _) ++
+         _parent.map("_parent" -> _) ++
+         _replication.map("replication" -> _.value) ++
+         _consistency.map("consistency" -> _.value) ++
+         Some("false").filter(Function.const(!_refresh)).map("refresh" -> _) ++
+         _timeout.map("timeout" -> _.length.toString))(hand)).getOrElse(
+           Future.failed(new IllegalArgumentException("id is required"))
+         )
+  }
+
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete.html */
-  def delete(
-    index: String,
-    kind: String)
-    (id: String,
-     version: Option[String] = None,
-     routing: Option[String] = None,
-     parent: Option[String] = None,
-     replication: Option[Replication] = None,
-     consistency: Option[Consistency] = None,
-     refresh: Boolean = false,
-     timeout: Option[FiniteDuration] = None) =
-    (root.DELETE / index / kind / id <<? Map.empty[String, String] ++
-     version.map("version" -> _) ++
-     routing.map("routing" -> _) ++
-     parent.map("_parent" -> _) ++
-     replication.map("replication" -> _.value) ++
-     consistency.map("consistency" -> _.value) ++
-     Some("false").filter(Function.const(!refresh)).map("refresh" -> _) ++
-     timeout.map("timeout" -> _.length.toString))
+  def delete(index: String, kind: String) = Delete(index, kind).id(_)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-update.html */
   def update(
@@ -163,16 +181,7 @@ case class Client(host: String) {
        script.map( s => ("script" -> s.src) ~ ("params" -> s.params)).getOrElse(JNothing))))
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-bulk.html */
-  /*def bulk(index: String = "", kind: String = "")(actions: Action*) = {
-    val endpoint = (root.POST /: index :: kind :: Nil) {
-      case (u, s) => if (u.isEmpty || kind.isEmpty) u else u / s
-    }
-    (endpoint / "_bulk" << actions.map {
-      case i: Index =>
-        compact(render(
-          (i.name -> ())))
-    }.mkString("\n"))
-  }*/
+  // todo
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete-by-query.html */
   def deleteQuery(index: String*)(kind: String*)(
@@ -206,87 +215,159 @@ case class Client(host: String) {
    //def multiTermVector(docs: Seq[TermVector]) =
    //  (root.POST / "_mtermvectors" << compact(render("docs" -> docs.map())))
 
-   /** q is expected to be in the form field:value or just value with df=field */
-   def uriSearch
-     (index: String*)
-     (kind: String*)
-     (q: String,
-      defaultField: Option[String]    = None,
-      analyzer: Option[String]        = None,
-      defaultOperator: Option[String] = None,
-      explain: Option[Boolean]        = None,
-      source: Option[Boolean]         = None,
-      sourceInclude: Option[String]   = None,
-      sourceExclude: Option[String]   = None,
-      fields: Seq[String]             = Seq.empty[String],
-      sort: Seq[String]               = Seq.empty[String],
-      trackScores: Option[Boolean]    = None,
-      timeout: Option[FiniteDuration] = None,
-      from: Option[Long]              = None,
-      size: Option[Int]               = None,
-      searchType: Option[SearchType]  = None,
-      lowercaseExpandedTerms: Option[Boolean] = None,
-      analyzeWildcard: Option[Boolean]= None,
-      routing: Option[String]         = None,
-      stats: Seq[String]              = Seq.empty[String]) = {
-      val endpoint = (root /: Seq(index, kind)) {
-        case (ep, seg) =>
-          ep / (if (seg.isEmpty) "_all" else seg.mkString(","))
-      }
-     (endpoint / "_search"
-      <<? Map("q" -> q) ++
-        defaultField.map("df" -> _) ++
-        analyzer.map("analyzer" -> _) ++
-        defaultOperator.map("default_operator" -> _) ++
-        explain.map("explain" -> _.toString) ++
-        source.map("_source" -> _.toString) ++
-        sourceInclude.map("_source_include" -> _) ++
-        sourceExclude.map("_source_exclude" -> _) ++
-        Some(fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
-        Some(sort).filter(_.nonEmpty).map("sort" -> _.mkString(",")) ++
-        trackScores.map("track_scores" -> _.toString) ++
-        timeout.map("timeout" -> _.length.toString) ++
-        from.map("from" -> _.toString) ++
-        size.map("size" -> _.toString) ++
-        searchType.map("search_type" -> _.value) ++
-        lowercaseExpandedTerms.map("lowercase_expanded_terms" -> _.toString) ++
-        analyzeWildcard.map("analyze_wildcard" -> _.toString) ++
-        routing.map("routing" -> _)
-        )
-     }
 
-  def search
-    (index: String, kind: String)
-    (term: (String, String),
-     timeout: Option[FiniteDuration] = None,
-     from: Option[Long]              = None,
-     size: Option[Int]               = None,
-     searchType: Option[SearchType]  = None,
-     sort: Seq[Sort]                 = Seq.empty[Sort],
-     trackScores: Option[Boolean]    = None,
+  case class URISearch
+    (_q: Option[String]               = None,
+     _index: List[String]             = Nil,
+     _kind: List[String]              = Nil,
+     _defaultField: Option[String]    = None,
+     _analyzer: Option[String]        = None,
+     _defaultOperator: Option[String] = None,
+     _explain: Option[Boolean]        = None,
+     _source: Option[Boolean]         = None,
+     _sourceInclude: Option[String]   = None,
+     _sourceExclude: Option[String]   = None,
+     _fields: Seq[String]             = Seq.empty[String],
+     _sort: List[String]              = Nil,
+     _trackScores: Option[Boolean]    = None,
+     _timeout: Option[FiniteDuration] = None,
+     _from: Option[Long]              = None,
+     _size: Option[Int]               = None,
+     _searchType: Option[SearchType]  = None,
+     _lowercaseExpandedTerms: Option[Boolean] = None,
+     _analyzeWildcard: Option[Boolean] = None,
+     _routing: Option[String]         = None,
+     _stats: List[String]             = List.empty[String]) {
+
+      def query(q: String) = copy(_q = Some(q))
+      def index(idx: String*) = copy(_index = idx.toList)
+      def kind(types: String*) = copy(_kind = types.toList)
+      def defaultField(df: String) = copy(_defaultField = Some(df))
+      def analyzer(a: String) = copy(_analyzer = Some(a))
+      def defaultOperator(defOp: String) = copy(_defaultOperator = Some(defOp))
+      def explain(exp: Boolean) = copy(_explain = Some(exp))
+      def source(src: Boolean) = copy(_source = Some(src))
+      def sourceInclude(incl: String) = copy(_sourceInclude = Some(incl))
+      def sourceExclude(excl: String) = copy(_sourceExclude = Some(excl))
+      def fields(fs: String*) = copy(_fields = fs.toList)
+      def sort(s: String*) = copy(_sort = s.toList)
+      def trackStores(t: Boolean) = copy(_trackScores = Some(t))
+      def timeout(to: FiniteDuration) = copy(_timeout = Some(to))
+      def from(f: Long) = copy(_from = Some(f))
+      def size(s: Int) = copy(_size = Some(s))
+      def searchType(tpe: SearchType) = copy(_searchType = Some(tpe))
+      def lowercaseExpandedTerms(exp: Boolean) = copy(_lowercaseExpandedTerms = Some(exp))
+      def analyzeWildcard(a: Boolean) = copy(_analyzeWildcard = Some(a))
+      def stats(s: String*) = copy(_stats = s.toList)
+
+      def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+        _q.map { q => 
+          val endpoint = (_index, _kind) match {
+            case (Nil, Nil) => root / "_all"
+            case (Nil, kinds) => root / "_all" / kinds.mkString(",")
+            case (indexes, Nil) => root / indexes.mkString(",")
+            case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
+          }
+          request(endpoint / "_search"
+                  <<? Map.empty[String, String] ++
+                    _q.map("q" -> _) ++
+                    _defaultField.map("df" -> _) ++
+                    _analyzer.map("analyzer" -> _) ++
+                    _defaultOperator.map("default_operator" -> _) ++
+                    _explain.map("explain" -> _.toString) ++
+                    _source.map("_source" -> _.toString) ++
+                    _sourceInclude.map("_source_include" -> _) ++
+                    _sourceExclude.map("_source_exclude" -> _) ++
+                    Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
+                    Some(_sort).filter(_.nonEmpty).map("sort" -> _.mkString(",")) ++
+                    _trackScores.map("track_scores" -> _.toString) ++
+                    _timeout.map("timeout" -> _.length.toString) ++
+                    _from.map("from" -> _.toString) ++
+                    _size.map("size" -> _.toString) ++
+                    _searchType.map("search_type" -> _.value) ++
+                    _lowercaseExpandedTerms.map("lowercase_expanded_terms" -> _.toString) ++
+                    _analyzeWildcard.map("analyze_wildcard" -> _.toString) ++
+                    _routing.map("routing" -> _))(hand)
+              }.getOrElse(
+                Future.failed(new IllegalArgumentException("id is required"))
+              )
+    }
+
+  /** query is expected to be in the form field:value or just value with df=field */
+  def uriSearch = URISearch().query(_)
+
+  case class Search
+    (_index: String,
+     _kind: String,
+     _term: Option[(String, String)]  = None,
+     _timeout: Option[FiniteDuration] = None,
+     _from: Option[Long]              = None,
+     _size: Option[Int]               = None,
+     _searchType: Option[SearchType]  = None,
+     _sort: List[Sort]                 = Nil,
+     _trackScores: Option[Boolean]    = None,
      // todo partial source
-     source: Option[Boolean]         = None,
+     _source: Option[Source]         = None,
      // todo script fields
      // todo fielddata_fields
-     fields: Option[Seq[String]]     = None,
-     postFilter: Option[(String, String)] = None) =
-    (root.POST / index / kind / "_search"
-     <<? Map.empty[String, String] ++
-       timeout.map("timeout" -> _.length.toString) ++
-       searchType.map("search_type" -> _.value)
-     << compact(render(
-       ("fields" -> fields) ~
-       ("_source" -> source) ~
-       ("from" -> from) ~
-       ("size" -> size) ~
-       ("track_scores" -> trackScores) ~
-       ("sort" -> Some(sort).filter(_.nonEmpty).map {
-         _.map { sort =>
-           (sort.field -> ("order" -> sort.order.map(_.value)))
-         }
-       }) ~
-       ("query" -> ("term" -> (term._1 -> term._2))) ~
-       ("post_filter" -> postFilter.map { pf =>
-         ("term" -> (pf._1 -> pf._2))
-        }))))
+     _fields: Option[Seq[String]]     = None,
+     _postFilter: Option[(String, String)] = None,
+     _facets: Option[List[(String, Facet)]] = None) {
+
+     def index(i: String) = copy(_index = i)
+     def kind(k: String) = copy(_kind = k)
+     def term(t: (String, String)) = copy(_term = Some(t))
+     def timeout(to: FiniteDuration) = copy(_timeout = Some(to))
+     def from(f: Long) = copy(_from = Some(f))
+     def size(s: Int) = copy(_size = Some(s))
+     def searchType(typ: SearchType) = copy(_searchType = Some(typ))
+     def sort(sorts: Sort*) = copy(_sort = sorts.toList)
+     def trackScores(t: Boolean) = copy(_trackScores = Some(t))
+     def source(src: Source) = copy(_source = Some(src))
+     def fields(fs: String*) = copy(_fields = Some(fs.toList))
+     def postFilter(filt: (String, String)) = copy(_postFilter = Some(filt))
+     def facets(fs: (String, Facet)*) = copy(_facets = Some(fs.toList))
+
+     def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+       _term.map {
+         case (field, value) =>
+           val body = compact(render(
+                     ("fields"  -> _fields) ~
+                     ("_source" -> _source.map {
+                       case Source.None => JBool(false)
+                       case Source.Include(incl) =>
+                         JArray(incl.map(JString(_)))
+                       case Source.Mixed(incl, excl) =>
+                         ("include" -> incl) ~ ("exclude" -> excl)
+                     }) ~
+                     ("from"    -> _from) ~
+                     ("size"    -> _size) ~
+                     ("track_scores" -> _trackScores) ~
+                     ("sort" -> Some(_sort).filter(_.nonEmpty).map {
+                       _.map { sort =>
+                         (sort.field -> ("order" -> sort.order.map(_.value)))
+                       }
+                     }) ~
+                     ("query"       -> ("term" -> (field -> value))) ~
+                     ("post_filter" -> _postFilter.map { pf =>
+                       ("term" -> (pf._1 -> pf._2))
+                     }) ~
+                     ("facets" -> _facets.map { fs =>
+                       (JObject() /: fs) {
+                         case (fobj, (name, facet)) =>
+                           fobj ~ (name -> facet.asJson)
+                       }
+                     })))
+           println("body %s" format body)
+           request(root.POST / _index / _kind / "_search"
+                   <<? Map.empty[String, String] ++
+                   _timeout.map("timeout"        -> _.length.toString) ++
+                   _searchType.map("search_type" -> _.value)
+                   << body)(hand)
+       }.getOrElse(
+         Future.failed(new IllegalArgumentException("term is required"))
+       )
+  }
+
+  def search(index: String, kind: String) = Search(index, kind).term(_)
 }
