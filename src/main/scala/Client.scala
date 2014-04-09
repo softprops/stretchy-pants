@@ -22,11 +22,15 @@ object Client {
   }
 }
 
-case class Client(host: String = "http://0.0.0.0:9200", http: Http = Http) {
+case class Client(
+  host: String = "http://0.0.0.0:9200", http: Http = Http) {
   private[this] def root = url(host)
 
-  def request[T](req: Req)(handler: Client.Handler[T])(implicit ec: ExecutionContext): Future[T] =
-    http(req <:< Map("User-Agent" -> Client.Agent) > handler)
+  def request[T]
+    (req: Req)
+    (handler: Client.Handler[T])
+    (implicit ec: ExecutionContext): Future[T] =
+     http(req <:< Map("User-Agent" -> Client.Agent) > handler)
 
   def complete(req: Req): Client.Completion = new Client.Completion {
     override def apply[T](handler: Client.Handler[T])(implicit ec: ExecutionContext) =
@@ -35,7 +39,25 @@ case class Client(host: String = "http://0.0.0.0:9200", http: Http = Http) {
 
   def refresh() = complete(root.POST / "_refresh")
 
-  def status = complete(root / "_status")
+  def status(index: String*) =
+    complete(
+      if (index.nonEmpty) root / index.mkString(",") / "_status"
+      else root / "_status")
+
+  case class Mapping(
+    _index: List[String] = Nil,
+    _kind: List[String] = Nil) {
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+      val endpoint = (_index, _kind) match {
+        case (Nil, Nil) => root / "_all"
+        case (Nil, kinds) => root / "_all" / kinds.mkString(",")
+        case (indexes, Nil) => root / indexes.mkString(",")
+        case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
+      }
+      request(endpoint / "_mapping")(hand)
+    }
+  }
+  def mapping = Mapping()
 
   case class Indexer(
     index: String, kind: String,
@@ -128,11 +150,53 @@ case class Client(host: String = "http://0.0.0.0:9200", http: Http = Http) {
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-get.html */
   def get(index: String, kind: String) = Get(index, kind).id(_)
 
-  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-multi-get.html.
-   *  todo: http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-multi-get.html#mget-source-filtering
-   */
-  def multiGet(index: String, kind: String)(ids: String*) =
-    (root.POST / index / kind / "_mget" << compact(render(("ids" -> ids.toList))))
+  object MultiGet {
+    case class Doc(
+      id: String,
+      _index: Option[String]        = None,
+      _kind: Option[String]         = None,
+      _source: Option[Source]       = None,
+      _fields: Option[List[String]] = None) {
+      def index(i: String) = copy(_index = Some(i))
+      def kind(k: String) = copy(_kind = Some(k))
+      def source(src: Source) = copy(_source = Some(src))
+      def fields(fs: String*) = copy(_fields = Some(fs.toList))
+      def asJson =
+        ("id"      -> id) ~
+        ("_index"  -> _index) ~
+        ("_type"   -> _kind) ~
+        ("_source" -> _source.map(_.asJson))
+    }
+
+    def doc(id: String) = Doc(id)
+  }
+
+  case class MultiGet(
+    _index: Option[String]    = None,
+    _kind: Option[String]     = None,
+    _docs: List[MultiGet.Doc] = Nil,
+    _ids: List[String]        = Nil) {
+
+    def index(i: String) = copy(_index = Some(i))
+    def kind(k: String) = copy(_kind = Some(k))
+    def docs(ds: MultiGet.Doc*) = copy(_docs = ds.toList)
+    def ids(ids: String*) = copy(_ids = ids.toList)
+
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+      val endpoint = (_index, _kind) match {
+        case (None, None)              => root
+        case (None, Some(kind))        => root / "_all" / kind // don't think this is right
+        case (Some(index), None)       => root / index
+        case (Some(index), Some(kind)) => root / index / kind
+      }
+      request(endpoint / "_mget" << compact(render(
+        ("docs" -> Some(_docs).filter(_.nonEmpty).map(_.map(_.asJson))) ~
+        ("ids" -> Some(_ids).filter(_.nonEmpty)))))(hand)
+    }
+  }
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-multi-get.html. */
+  def multiGet = MultiGet()
 
   case class Delete(
     index: String, kind: String,
@@ -333,13 +397,7 @@ case class Client(host: String = "http://0.0.0.0:9200", http: Http = Http) {
          case (field, value) =>
            val body = compact(render(
                      ("fields"  -> _fields) ~
-                     ("_source" -> _source.map {
-                       case Source.None => JBool(false)
-                       case Source.Include(incl) =>
-                         JArray(incl.map(JString(_)))
-                       case Source.Mixed(incl, excl) =>
-                         ("include" -> incl) ~ ("exclude" -> excl)
-                     }) ~
+                     ("_source" -> _source.map(_.asJson)) ~
                      ("from"    -> _from) ~
                      ("size"    -> _size) ~
                      ("track_scores" -> _trackScores) ~
