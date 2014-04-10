@@ -37,27 +37,35 @@ case class Client(
       request(req)(handler)
   }
 
-  def refresh() = complete(root.POST / "_refresh")
+  object indexes {
+    def open(index: String) = complete(root.POST / index / "_open")
 
-  def status(index: String*) =
-    complete(
-      if (index.nonEmpty) root / index.mkString(",") / "_status"
-      else root / "_status")
+    def close(index: String) = complete(root.POST / index / "_close")
 
-  case class Mapping(
-    _index: List[String] = Nil,
-    _kind: List[String] = Nil) {
-    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
-      val endpoint = (_index, _kind) match {
-        case (Nil, Nil) => root / "_all"
-        case (Nil, kinds) => root / "_all" / kinds.mkString(",")
-        case (indexes, Nil) => root / indexes.mkString(",")
-        case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
+    def delete(index: String) = complete(root.DELETE / index)
+
+    def refresh() = complete(root.POST / "_refresh")
+
+    def status(index: String*) =
+      complete(
+        if (index.nonEmpty) root / index.mkString(",") / "_status"
+        else root / "_status")
+
+    case class Mapping(
+      _index: List[String] = Nil,
+      _kind: List[String] = Nil) {
+      def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+        val endpoint = (_index, _kind) match {
+          case (Nil, Nil) => root / "_all"
+          case (Nil, kinds) => root / "_all" / kinds.mkString(",")
+          case (indexes, Nil) => root / indexes.mkString(",")
+          case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
+        }
+        request(endpoint / "_mapping")(hand)
       }
-      request(endpoint / "_mapping")(hand)
     }
+    def mapping = Mapping()
   }
-  def mapping = Mapping()
 
   case class Indexer(
     index: String, kind: String,
@@ -249,15 +257,16 @@ case class Client(
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete-by-query.html */
   def deleteQuery(index: String*)(kind: String*)(
-    q: String,
+    q: Query,
     defaultField: Option[String]    = None,
     analyzer: Option[String]        = None,
     defaultOperator: Option[String] = None) =
-    (root.DELETE / (if (index.isEmpty) "_all" else index.mkString(",")) /
+    complete(root.DELETE / (if (index.isEmpty) "_all" else index.mkString(",")) /
      (if (kind.isEmpty) "_all" else kind.mkString(",")) / "_query"
-     <<? Map("q" -> q) ++ defaultField.map("df" -> _) ++
+     <<? Map.empty[String, String] ++ defaultField.map("df" -> _) ++
            analyzer.map("analyzer" -> _) ++
-           defaultOperator.map("default_operator" -> _))
+           defaultOperator.map("default_operator" -> _)
+     << compact(render(("query" -> q.asJson))))
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-termvectors.html */
   def termVector(index: String, kind: String)(id: String)(
