@@ -363,7 +363,7 @@ case class Client(
   case class Search
     (_index: String,
      _kind: String,
-     _term: Option[(String, String)]  = None,
+     _query: Option[Query]            = None,
      _timeout: Option[FiniteDuration] = None,
      _from: Option[Long]              = None,
      _size: Option[Int]               = None,
@@ -380,7 +380,7 @@ case class Client(
 
      def index(i: String) = copy(_index = i)
      def kind(k: String) = copy(_kind = k)
-     def term(t: (String, String)) = copy(_term = Some(t))
+     def query(q: Query) = copy(_query = Some(q))
      def timeout(to: FiniteDuration) = copy(_timeout = Some(to))
      def from(f: Long) = copy(_from = Some(f))
      def size(s: Int) = copy(_size = Some(s))
@@ -393,8 +393,8 @@ case class Client(
      def facets(fs: (String, Facet)*) = copy(_facets = Some(fs.toList))
 
      def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
-       _term.map {
-         case (field, value) =>
+       _query.map {
+         case q =>
            val body = compact(render(
                      ("fields"  -> _fields) ~
                      ("_source" -> _source.map(_.asJson)) ~
@@ -406,7 +406,7 @@ case class Client(
                          (sort.field -> ("order" -> sort.order.map(_.value)))
                        }
                      }) ~
-                     ("query"       -> ("term" -> (field -> value))) ~
+                     ("query"       -> q.asJson) ~
                      ("post_filter" -> _postFilter.map { pf =>
                        ("term" -> (pf._1 -> pf._2))
                      }) ~
@@ -427,5 +427,5 @@ case class Client(
        )
   }
 
-  def search(index: String, kind: String) = Search(index, kind).term(_)
+  def search(index: String, kind: String) = Search(index, kind).query(_)
 }
