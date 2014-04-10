@@ -255,18 +255,37 @@ case class Client(
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-bulk.html */
   // todo
 
+  case class DeleteQuery(
+    _q: Query,
+    _index: List[String] = Nil,
+    _kind: List[String] = Nil,
+    _defaultField: Option[String]    = None,
+    _analyzer: Option[String]        = None,
+    _defaultOperator: Option[String] = None) {
+    def index(i: String*) = copy(_index = i.toList)
+    def kind(k: String*) = copy(_kind = k.toList)
+    def query(q: Query) = copy(_q = q)
+    def defaultField(df: String) = copy(_defaultField = Some(df))
+    def analyzer(a: String) = copy(_analyzer = Some(a))
+    def defaultOperator(op: String) = copy(_defaultOperator = Some(op))
+    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+      val endpoint = (_index, _kind) match {
+        case (Nil, Nil) => root / "_all"
+        case (Nil, kinds) => root / "_all" / kinds.mkString(",")
+        case (indexes, Nil) => root / indexes.mkString(",")
+        case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
+      }
+      request(endpoint.DELETE / "_query"
+              <<? Map.empty[String, String] ++
+                _defaultField.map("df" -> _) ++
+                _analyzer.map("analyzer" -> _) ++
+                _defaultOperator.map("default_operator" -> _)
+              << compact(render(("query" -> _q.asJson))))(hand)
+    }
+  }
+
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete-by-query.html */
-  def deleteQuery(index: String*)(kind: String*)(
-    q: Query,
-    defaultField: Option[String]    = None,
-    analyzer: Option[String]        = None,
-    defaultOperator: Option[String] = None) =
-    complete(root.DELETE / (if (index.isEmpty) "_all" else index.mkString(",")) /
-     (if (kind.isEmpty) "_all" else kind.mkString(",")) / "_query"
-     <<? Map.empty[String, String] ++ defaultField.map("df" -> _) ++
-           analyzer.map("analyzer" -> _) ++
-           defaultOperator.map("default_operator" -> _)
-     << compact(render(("query" -> q.asJson))))
+  def deleteQuery(q: Query) = DeleteQuery(q)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-termvectors.html */
   def termVector(index: String, kind: String)(id: String)(
