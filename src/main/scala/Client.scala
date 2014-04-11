@@ -37,12 +37,42 @@ case class Client(
       request(req)(handler)
   }
 
-  object indexes {
+  object indices {
     def open(index: String) = complete(root.POST / index / "_open")
 
     def close(index: String) = complete(root.POST / index / "_close")
 
     def delete(index: String) = complete(root.DELETE / index)
+
+    def exists(index: String) = complete(root.HEAD / index)
+
+    case class Optimize(
+      _indexes: List[String]               = Nil,
+      _maxNumSegments: Option[Int]         = None,
+      _onlyExpungeDeletes: Option[Boolean] = None,
+      _flush: Option[Boolean]              = None,
+      _waitForMerge: Option[Boolean]       = None,
+      _force: Option[Boolean]              = None) {
+      def indexes(i: String*) = copy(_indexes = i.toList)
+      def maxNumSegments(max: Int) = copy(_maxNumSegments = Some(max))
+      def onlyExpungeDeletes(o: Boolean) = copy(_onlyExpungeDeletes = Some(o))
+      def flush(b: Boolean) = copy(_flush = Some(b))
+      def waitForMerge(w: Boolean) = copy(_waitForMerge = Some(w))
+      def force(f: Boolean) = copy(_force = Some(f))
+      def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+        request((_indexes match {
+          case Nil => root
+          case xs => root / xs.mkString(",")
+        }).POST /"_optimize"
+        << Map.empty[String, String] ++
+           _maxNumSegments.map("max_num_segments" -> _.toString) ++
+           _onlyExpungeDeletes.map("only_expunge_deletes" -> _.toString) ++
+           _flush.map("flush" -> _.toString) ++
+           _waitForMerge.map("wait_for_merge" -> _.toString) ++
+           _force.map("force" -> _.toString))(hand)
+    }
+
+    def optimize(index: String*) = Optimize(index.toList)
 
     def refresh() = complete(root.POST / "_refresh")
 
@@ -275,12 +305,14 @@ case class Client(
         case (indexes, Nil) => root / indexes.mkString(",")
         case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
       }
+      val body = compact(render(("query" -> _q.asJson)))
+      println(s"delete query body $body ${endpoint.toRequest.getUrl}")
       request(endpoint.DELETE / "_query"
               <<? Map.empty[String, String] ++
                 _defaultField.map("df" -> _) ++
                 _analyzer.map("analyzer" -> _) ++
                 _defaultOperator.map("default_operator" -> _)
-              << compact(render(("query" -> _q.asJson))))(hand)
+              << body)(hand)
     }
   }
 
