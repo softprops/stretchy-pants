@@ -10,5 +10,5 @@ crossScalaVersions := Seq("2.10.4")
 
 scalaVersion := crossScalaVersions.value.head
 
-initialCommands in console := "import stretchypants._, scala.concurrent.ExecutionContext.Implicits.global, dispatch._; val es = Client();"
+initialCommands in console := "import stretchypants._, scala.concurrent.ExecutionContext.Implicits.global, dispatch._; val http = new Http;val es = Client(http = http);"
 
