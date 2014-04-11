@@ -47,4 +47,43 @@ object Filter {
   }
 
   def bool(primary: Query) = Bool(primary)
+
+  case class Exists(
+    field: String, _value: Option[String] = None) extends Filter {
+    def value(v: String) = copy(_value = Some(v))
+    def asJson =
+      ("constant_score" ->
+       ("filter" ->
+        ("exists" ->
+         (field -> _value))))
+  }
+
+  def exists(field: String) = Exists(field).value(_)
+
+  case class BoundedBox(
+    q: Query, _field: Option[String] = None,
+    _cache: Option[Boolean] = None,
+    _box: Option[(String, String)] = None) extends Filter {
+    def field(f: String) = copy(_field = Some(f))
+    /** (topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) */
+    def box(b: (Double, Double, Double, Double)) =
+      copy(_box = Some((s"${b._1}, ${b._2}", s"${b._3}, ${b._4}")))
+    def geohash(b: (String, String)) =
+      copy(_box = Some(b))
+    def asJson =
+      ("filtered" ->
+       ("query" -> q.asJson) ~
+       ("filter" ->
+        ("geo_bounding_box" ->
+         _field.map { fld =>
+           (fld -> _box.map {
+             case (topLeft, botRight) =>
+               ("top_left" -> topLeft) ~
+               ("bottom_right" -> botRight)
+           }) ~
+           ("_cache" -> _cache)
+         })))
+  }
+
+  def boundedBox(q: Query) = BoundedBox(q)
 }
