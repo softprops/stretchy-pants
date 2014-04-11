@@ -87,22 +87,30 @@ object Filter {
 
   def boundedBox(q: Query) = BoundedBox(q).field(_)
 
-
   case class GeoDistance(
     q: Query,
-    _field: Option[String]    = None,
-    _distance: Option[String] = None,
-    _location: Option[String] = None) extends Filter {
+    _field: Option[String]         = None,
+    _distance: Option[String]      = None,
+    _location: Option[String]      = None,
+    _distanceType: Option[String]  = None,
+    _optimizeBBox: Option[Boolean] = None,
+    _cache: Option[Boolean]        = None) extends Filter {
     def field(f: String) = copy(_field = Some(f))
     def location(l: (Double, Double)) =
       copy(_location = Some(s"${l._1}, ${l._2}"))
     def geohash(g: String) = copy(_location = Some(g))
+    /** units defined in http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/common-options.html#distance-units */
     def distance(d: String) = copy(_distance = Some(d))
+    def distanceType(d: String) = copy(_distanceType = Some(d))
+    def optimizeBBox(b: Boolean) = copy(_optimizeBBox = Some(b))
+    def cache(c: Boolean) = copy(_cache = Some(c))
     def asJson =
       ("filtered" ->
        ("query" -> q.asJson) ~
        ("filter" ->
         ("geo_distance" ->
+         ("distance_type" -> _distanceType) ~
+         ("optimize_bbox" -> _optimizeBBox) ~
          ("distance" -> _distance) ~
          _field.map { fld =>
            (fld -> _location)
@@ -110,4 +118,30 @@ object Filter {
   }
 
   def geodistance(q: Query) = GeoDistance(q).field(_)
+
+
+  case class GeoRange(
+    q: Query,
+    _field: Option[String]    = None,
+    _location: Option[String] = None,
+    _from: Option[String]     = None,
+    _to: Option[String]       = None) extends Filter {
+    def field(f: String) = copy(_field = Some(f))
+    def from(f: String) = copy(_from = Some(f))
+    def to(t: String) = copy(_to = Some(t))
+    def geohash(g: String) = copy(_location = Some(g))
+    def location(l: (Double, Double)) =
+      copy(_location = Some(s"${l._1}, ${l._2}"))
+    def asJson =
+      ("filtered" ->
+       ("query" -> q.asJson) ~
+       ("filter" ->
+        ("geo_distance_range" ->
+         ("from" -> _from) ~
+         ("to"   -> _to) ~
+         _field.map { fld =>
+           (fld -> _location)
+         }.getOrElse(("x" -> None)))))
+  }
+  def georange(q: Query) = GeoRange(q).field(_)
 }
