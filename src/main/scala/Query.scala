@@ -104,6 +104,42 @@ object Query {
 
   def boosting = Boosting()
 
+  case class CommonTerms(
+    _query: String,
+    _cutoffFrequency: Option[Double] = None,
+    _lowFreqOperator: Option[String] = None,
+    _minimumShouldMatch: Option[Int] = None) extends Query {
+    def query(q: String) = copy(_query = q)
+    def cutoffFrequency(c: Double) = copy(_cutoffFrequency = Some(c))
+    def lowFreqOperator(op: String) = copy(_lowFreqOperator = Some(op))
+    def minimumShouldMatch(m: Int) = copy(_minimumShouldMatch = Some(m))
+    def asJson =
+      ("common" ->
+       ("body" ->
+        ("query" -> _query) ~
+        ("cutoff_frequency" -> _cutoffFrequency) ~
+        ("low_freq_operator" -> _lowFreqOperator) ~
+        ("minimum_should_match" -> _minimumShouldMatch)))
+  }
+
+  def commonTerms(query: String) = CommonTerms(query)
+
+  case class Dismatched(
+    _queries: List[Query]       = Nil,
+    _tieBreaker: Option[Double] = None,
+    _boost: Option[Double]      = None) extends Query {
+    def queries(q: Query*) = copy(_queries = q.toList)
+    def tieBreaker(t: Double) = copy(_tieBreaker = Some(t))
+    def boost(b: Double) = copy(_boost = Some(b))
+    def asJson =
+      ("dis_max" ->
+       ("tie_breaker" -> _tieBreaker) ~
+       ("boost" -> _boost) ~
+       ("queries" -> _queries.map(_.asJson)))
+  }
+
+  def dismatched = Dismatched()
+
   // todo: filtered
 
   case class Fuzzy(
@@ -156,7 +192,33 @@ object Query {
       ("match_all" ->
         JObject() ~ ("boost" -> _boost))
   }
+
   def matchall = MatchAll()
+
+  // todo: support string and date ranges
+  case class Range(
+    field: String,
+    _gte: Option[Long] = None,
+    _gt: Option[Long]  = None,
+    _lte: Option[Long] = None,
+    _lt: Option[Long]  = None,
+    _boost: Option[Double] = None) extends Query {
+    def gte(v: Long) = copy(_gte = Some(v))
+    def gt(v: Long) = copy(_gt = Some(v))
+    def lte(v: Long) = copy(_lte = Some(v))
+    def lt(v: Long) = copy(_lt = Some(v))
+    def boost(b: Double) = copy(_boost = Some(b))
+    def asJson =
+      ("range" ->
+       (field ->
+        ("gte" -> _gte) ~
+        ("gt" -> _gt) ~
+        ("lte" -> _lte) ~
+        ("lt" -> _lt) ~
+        ("boost" -> _boost)))
+  }
+
+  def range(field: String) = Range(field)
 
   case class Term(
     _term: (String, String),
