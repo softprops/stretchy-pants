@@ -44,8 +44,10 @@ multiTweeting.ids((1 to 3).map(_.toString):_*)(as.String).onComplete(println)
 val detweet = es.delete("twitter", "tweet")
 (1 to 3).foreach(id => detweet(id.toString)(as.String).onComplete(println))
 
-// or delete tweets by query (todo)
-val multiDetweet = es.deleteQuery(Query.matchall).index("twitter").kind("tweet")(as.String).onComplete(println)
+// or delete tweets by query
+val multiDetweet = es.deleteQuery(Query.matchall)
+  .index("twitter")
+  .kind("tweet")(as.String).onComplete(println)
 ```
 
 
