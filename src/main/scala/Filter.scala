@@ -85,5 +85,29 @@ object Filter {
          })))
   }
 
-  def boundedBox(q: Query) = BoundedBox(q)
+  def boundedBox(q: Query) = BoundedBox(q).field(_)
+
+
+  case class GeoDistance(
+    q: Query,
+    _field: Option[String]    = None,
+    _distance: Option[String] = None,
+    _location: Option[String] = None) extends Filter {
+    def field(f: String) = copy(_field = Some(f))
+    def location(l: (Double, Double)) =
+      copy(_location = Some(s"${l._1}, ${l._2}"))
+    def geohash(g: String) = copy(_location = Some(g))
+    def distance(d: String) = copy(_distance = Some(d))
+    def asJson =
+      ("filtered" ->
+       ("query" -> q.asJson) ~
+       ("filter" ->
+        ("geo_distance" ->
+         ("distance" -> _distance) ~
+         _field.map { fld =>
+           (fld -> _location)
+         }.getOrElse(("x" -> None)))))
+  }
+
+  def geodistance(q: Query) = GeoDistance(q).field(_)
 }
