@@ -9,6 +9,7 @@ trait Query {
 
 /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-queries.html */
 object Query {
+
   /** The match family of queries does not go through a "query parsing" process. It does not support field name prefixes, wildcard characters, or other "adva    * nce" features. For this reason, chances of it failing are very small / non existent, and it provides an excellent behavior when it comes to just analyz    * e and run that text as a query behavior (which is usually what a text search box does). Also, the phrase_prefix type can provide a great "as you type"     * behavior to automatically load search results.
     *  http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-match-query.html
     */
@@ -46,6 +47,7 @@ object Query {
 
   def matching(f: (String, String)) = Matching(f._1, f._2)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-multi-match-query.html */
   case class MultiMatching(
     query: String,
     _fields: List[String]       = Nil,
@@ -65,6 +67,7 @@ object Query {
 
   def multimatching(q: String) = MultiMatching(q)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-bool-query.html */
   case class Bool(
     clauses: Map[String, List[Query]] =
       Map.empty[String, List[Query]].withDefaultValue(Nil),
@@ -83,10 +86,11 @@ object Query {
        ("disable_coord" -> _disableCoord))
     private def clause(kind: String)(q: Query) =
       copy(clauses + (kind -> (q :: clauses(kind))))
-   }
+  }
 
   def bool = Bool()
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-boosting-query.html */
   case class Boosting(
     clauses: Map[String, List[Query]] =
       Map.empty[String, List[Query]].withDefaultValue(Nil),
@@ -105,6 +109,7 @@ object Query {
 
   def boosting = Boosting()
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-common-terms-query.html */
   case class CommonTerms(
     _query: String,
     _cutoffFrequency: Option[Double] = None,
@@ -125,6 +130,9 @@ object Query {
 
   def commonTerms(query: String) = CommonTerms(query)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-constant-score-query.html */
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-dis-max-query.html */
   case class Dismatched(
     _queries: List[Query]       = Nil,
     _tieBreaker: Option[Double] = None,
@@ -143,7 +151,8 @@ object Query {
 
   // todo: filtered
 
-  case class FuzzyLike(
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-flt-query.html */
+  case class FuzzyLikeThis(
     query: String,
     _fields: List[String] = Nil,
     _maxQueryTerms: Option[Int] = None) extends Query {
@@ -152,11 +161,12 @@ object Query {
     def asJson = 
       ("fuzzy_like_this" -> ("fields" -> _fields) ~ ("like_text" -> query) ~
        ("max_query_terms" -> _maxQueryTerms))
-   }
+  }
 
-  def fuzzyLike(query: String) = FuzzyLike(query)
+  def fuzzyLikeThis(query: String) = FuzzyLikeThis(query)
 
-  case class FuzzyLikeField(
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-flt-field-query.html */
+  case class FuzzyLikeThisField(
     _field: String,
     _query: Option[String]      = None,
     _ignoreTf: Option[Boolean]  = None,
@@ -184,12 +194,11 @@ object Query {
         ("analyzer"        -> _analyzer)))
   }
 
-  def fuzzyLikeFile(field: String) = FuzzyLikeField(field).query(_)
+  def fuzzyLikeThisField(field: String) = FuzzyLikeThisField(field).query(_)
 
   // todo: http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-function-score-query.html
 
-  // http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-fuzzy-query.html
-
+  /**  http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-fuzzy-query.html */
   case class Fuzzy(
     _field: String,
     _value: Option[String] = None,
@@ -222,26 +231,30 @@ object Query {
 
   def geoshape(field: String) = GeoShape(field).*/
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-child-query.html */
   case class HasChild(
     _kind: String,
     _q: Option[Query] = None,
-    _scoreType: Option[String] = None) extends Query {
+    _scoreType: Option[ScoreType] = None) extends Query {
     def query(q: Query) = copy(_q = Some(q))
-    def scoreType(s: String) = copy(_scoreType = Some(s))
+    def scoreType(s: ScoreType) = copy(_scoreType = Some(s))
     def asJson =
       ("has_child" ->
        ("type" -> _kind) ~
-       ("score_type" -> _scoreType) ~
+       ("score_type" -> _scoreType.map(_.value)) ~
        ("query" -> _q.map(_.asJson)))
   }
 
   def hasChild(kind: String) = HasChild(kind).query(_)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-parent-query.html */
   case class HasParent(
     _kind: String,
     _q: Option[Query] = None,
+    /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-parent-query.html#_scoring_capabilities_2 */
     _scoreType: Option[String] = None) extends Query {
     def query(q: Query) = copy(_q = Some(q))
+    def score = scoreType("score")
     def scoreType(s: String) = copy(_scoreType = Some(s))
     def asJson =
       ("has_parent" ->
@@ -252,6 +265,7 @@ object Query {
 
   def hasParent(kind: String) = HasParent(kind).query(_)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-ids-query.html */
   case class Ids(
     _ids: List[String],
     _kind: Option[String] = None) extends Query {
@@ -279,6 +293,37 @@ object Query {
   def matchall = MatchAll()
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-mlt-query.html */
+  case class MoreLikeThis(
+    _query: String,
+    _fields: List[String] = Nil,
+    _percentTermsToMatch: Option[Double] = None,
+    _minTermFreq: Option[Int] = None,
+    _maxQueryTerms: Option[Int] = None,
+    _stopWords: List[String] = Nil,
+    _minDocFreq: Option[Int] = None,
+    _maxDocFreq: Option[Int] = None,
+    _minWordLength: Option[Int] = None,
+    _boostTerms: Option[Int] = None,
+    _boost: Option[Double] = None,
+    _analyzer: Option[String] = None) extends Query {
+    def fields(fs: String*) = copy(_fields = fs.toList)
+    def asJson =
+      ("more_like_this" ->
+       ("fields" -> Some(_fields).filter(_.nonEmpty)) ~
+       ("like_text"              -> _query) ~
+       ("percent_terms_to_match" -> _percentTermsToMatch) ~
+       ("min_term_freq"          -> _minTermFreq) ~
+       ("max_query_terms"        -> _maxQueryTerms) ~
+       ("stop_words"             -> Some(_stopWords).filter(_.nonEmpty)) ~
+       ("min_doc_freq"           -> _minDocFreq) ~
+       ("max_doc_freq"           -> _maxDocFreq) ~
+       ("min_word_length"        -> _minWordLength) ~
+       ("boost_terms"            -> _boostTerms) ~
+       ("boost"                  -> _boost) ~
+       ("analyzer"               -> _analyzer))
+  }
+
+  def moreLikeThis(query: String) = MoreLikeThis(query)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-mlt-field-query.html */
 
@@ -302,9 +347,17 @@ object Query {
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html */
   case class QueryString(
-    q: String) extends Query {
+    q: String,
+    _defaultField: Option[String]     = None,
+    _defaultOperation: Option[String] = None) extends Query {
+    def defaultField(d: String) = copy(_defaultField = Some(d))
+    def defaultOperation(d: String) = copy(_defaultOperation = Some(d))
+    def and = defaultOperation("AND")
+    def or = defaultOperation("OR")
     def asJson =
       ("query_string" ->
+       ("default_field" -> _defaultField) ~
+       ("default_operation" -> _defaultOperation) ~
        ("query" -> q))
   }
 
@@ -312,9 +365,17 @@ object Query {
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-simple-query-string-query.html */
   case class SimpleQueryString(
-    q: String) extends Query {
+    q: String,
+    _defaultOperator: Option[String] = None,
+    _fields: List[String]            = Nil) extends Query {
+    def fields(f: String*) = copy(_fields = f.toList)
+    def defaultOperator(d: String) = copy(_defaultOperator = Some(d))
+    def or = defaultOperator("OR")
+    def and = defaultOperator("AND")
     def asJson =
       ("simple_query_string" ->
+       ("default_operator" -> _defaultOperator) ~
+       ("fields" -> Some(_fields).filter(_.nonEmpty)) ~
        ("query" -> q))
   }
 
@@ -346,7 +407,6 @@ object Query {
 
   def range(field: String) = Range(field)
 
-
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-regexp-query.html */
   case class Regex(
     _field: String,
@@ -366,12 +426,12 @@ object Query {
 
   def regex(field: String) = Regex(field).value(_)
 
-
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-first-query.html */
   case class SpanFirst(
     _field: String,
     _value: Option[String] = None,
     _end: Option[Int] = None) extends Query {
+    def end(e: Int) = copy(_end = Some(e))
     def value(v: String) = copy(_value = Some(v))
     def asJson =
       ("span_first" ->
@@ -382,7 +442,89 @@ object Query {
   }
 
   def spanFirst(field: String) = SpanFirst(field).value(_)
+  
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-multi-term-query.html */
+  case class SpanMulti(q: Query) extends Query {
+    def asJson =
+      ("span_multi" ->
+       ("match" -> q.asJson))
+  }
 
+  /** query should be one of fuzzy, prefix, term range or regexp query */
+  def spanMulti(q: Query) = SpanMulti(q)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-near-query.html */
+  case class SpanNear(
+    _terms: List[(String, String)] = Nil,
+    _slop: Option[Int] = None,
+    _inOrder: Option[Boolean] = None,
+    _collectPayloads: Option[Boolean] = None) extends Query {
+    def terms(t: (String, String)*) = copy(_terms = t.toList)
+    def term(t: (String, String)) = copy(_terms = t :: _terms)
+    def slop(s: Int) = copy(_slop = Some(s))
+    def inOrder(b: Boolean) = copy(_inOrder = Some(b))
+    def collectPayloads(c: Boolean) = copy(_collectPayloads = Some(c))
+    def asJson =
+      ("span_near" ->
+       ("clauses" -> _terms.map {
+         case (key, value) => ("span_term"  -> (key -> value))           
+       }) ~
+       ("slop" -> _slop) ~
+       ("in_order" -> _inOrder) ~
+       ("collect_payloads" -> _collectPayloads))
+  }
+
+  def spanNear = SpanNear()
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-not-query.html */
+  case class SpanNot(
+    _include: Option[(String, String)] = None,
+    _exclude: Option[(String, String)] = None) extends Query {
+    def include(i: (String, String)) = copy(_include = Some(i))
+    def exclude(e: (String, String)) = copy(_exclude = Some(e))
+    def asJson =
+      ("span_not" ->
+       ("include" -> _include.map {
+         case (key, value) => (key -> value)
+       }) ~
+       ("exclude" -> _exclude.map {
+         case (key, value) => (key -> value)
+       }))
+  }
+
+  def spanNot = SpanNot()
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-or-query.html */
+  case class SpanOr(
+    _terms: List[(String, String)] = Nil) extends Query {
+    def terms(t: (String, String)*) = copy(_terms = t.toList)
+    def term(t: (String, String)) = copy(_terms = t :: _terms)
+    def asJson =
+      ("span_or" ->
+       ("clauses" -> _terms.map {
+         case (key, value) => ("span_term"  -> (key -> value))           
+       }))
+  }
+
+  def spanOr = SpanOr()
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-span-term-query.html */
+  case class SpanTerm(
+    _field: String,
+    _value: Option[String] = None,
+    _boost: Option[Double] = None) extends Query {
+    def value(v: String) = copy(_value = Some(v))
+    def boost(b: Double) = copy(_boost = Some(b))
+    def asJson =
+      ("span_term" ->
+       (_field ->
+        ("value" -> _value) ~
+        ("boost" -> _boost)))
+  }
+
+  def spanTerm(field: String) = SpanTerm(field)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-term-query.html */
   case class Term(
     _term: (String, String),
     _boost: Option[Double] = None) extends Query {
@@ -399,6 +541,7 @@ object Query {
 
   def term(t: (String, String)) = Term(t)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-terms-query.html */
   case class Terms(
     _field: String,
     _values: List[String]            = Nil,
@@ -409,5 +552,23 @@ object Query {
       ("terms" ->
        (_field -> _values) ~ ("minimum_should_match" -> _minimumShouldMatch))
   }
+
   def terms(field: String)(values: String*) = Terms(field).values(values:_*)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-top-children-query.html */
+  
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-wildcard-query.html */
+  case class Wildcard(
+    _field: String,
+    _value: Option[String] = None,
+    _boost: Option[Double] = None) extends Query {
+    def value(v: String) = copy(_value = Some(v))
+    def boost(b: Double) = copy(_boost = Some(b))
+    def asJson =
+      ("wildcard" ->
+       (_field ->
+        ("value" -> _value) ~
+        ("boost" -> _boost)))
+  }
+  def wildcard(field: String) = Wildcard(field)
 }

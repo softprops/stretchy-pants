@@ -4,7 +4,9 @@ name := "stretchy-pants"
 
 version := "0.1.0-SNAPSHOT"
 
-libraryDependencies ++= Seq("net.databinder.dispatch" %% "dispatch-json4s-native" % "0.11.0")
+libraryDependencies ++= Seq(
+  "net.databinder.dispatch" %% "dispatch-json4s-native" % "0.11.0",
+  "org.scalatest" %% "scalatest" % "1.9.1" % "test")
 
 crossScalaVersions := Seq("2.10.4")
 

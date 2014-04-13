@@ -138,7 +138,7 @@ case class Client(
                 _consistency.map("consistency" -> _.value) ++
                 _replication.map("replication" -> _.value) ++
                 Some("true").filter(Function.const(_refresh)).map("refresh" -> _) ++
-                _timeout.map("timeout" -> _.length.toString)
+                _timeout.map("timeout" -> _.toMillis.toString)
               << doc)(hand)).getOrElse(
         Future.failed(new IllegalArgumentException("doc is required"))
       )
@@ -265,7 +265,7 @@ case class Client(
          _replication.map("replication" -> _.value) ++
          _consistency.map("consistency" -> _.value) ++
          Some("false").filter(Function.const(!_refresh)).map("refresh" -> _) ++
-         _timeout.map("timeout" -> _.length.toString))(hand)).getOrElse(
+         _timeout.map("timeout" -> _.toMillis.toString))(hand)).getOrElse(
            Future.failed(new IllegalArgumentException("id is required"))
          )
   }
@@ -405,7 +405,7 @@ case class Client(
                     Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
                     Some(_sort).filter(_.nonEmpty).map("sort" -> _.mkString(",")) ++
                     _trackScores.map("track_scores" -> _.toString) ++
-                    _timeout.map("timeout" -> _.length.toString) ++
+                    _timeout.map("timeout" -> _.toMillis.toString) ++
                     _from.map("from" -> _.toString) ++
                     _size.map("size" -> _.toString) ++
                     _searchType.map("search_type" -> _.value) ++
@@ -479,7 +479,7 @@ case class Client(
            println("body %s" format body)
            request(root.POST / _index / _kind / "_search"
                    <<? Map.empty[String, String] ++
-                   _timeout.map("timeout"        -> _.length.toString) ++
+                   _timeout.map("timeout"        -> _.toMillis.toString) ++
                    _searchType.map("search_type" -> _.value)
                    << body)(hand)
        }.getOrElse(
