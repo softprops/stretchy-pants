@@ -12,5 +12,7 @@ crossScalaVersions := Seq("2.10.4")
 
 scalaVersion := crossScalaVersions.value.head
 
-initialCommands in console := "import stretchypants._, scala.concurrent.ExecutionContext.Implicits.global, dispatch._; val http = new Http;val es = Client(http = http);"
+scalacOptions += "-feature"
+
+initialCommands in console := "import stretchypants._, scala.concurrent.ExecutionContext.Implicits.global, dispatch._, org.json4s.JValue, org.json4s.JsonDSL._; val http = new Http;val es = Client(http = http);import org.json4s.native.JsonMethods.{ compact, render };def str(js: JValue) = compact(render(js))"
 
