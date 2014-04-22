@@ -9,8 +9,11 @@ trait Filter {
 
 /* http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-filters.html */
 object Filter {
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-and-filter.html */
   case class And(
-    q: Query, ands: List[Query] = Nil,
+    q: Query,
+    ands: List[Query]       = Nil,
     _cache: Option[Boolean] = None) extends Filter {
     def and(a: Query) = copy(ands = a :: ands)
     def cache(c: Boolean) = copy(_cache = Some(c))
@@ -25,6 +28,7 @@ object Filter {
 
   def and(primary: Query) = And(primary)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-bool-filter.html */
   case class Bool(
     q: Query, clauses: Map[String, List[Query]]
       = Map.empty[String, List[Query]].withDefaultValue(Nil),
@@ -48,8 +52,10 @@ object Filter {
 
   def bool(primary: Query) = Bool(primary)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-exists-filter.html */
   case class Exists(
-    field: String, _value: Option[String] = None) extends Filter {
+    field: String,
+    _value: Option[String] = None) extends Filter {
     def value(v: String) = copy(_value = Some(v))
     def asJson =
       ("constant_score" ->
@@ -60,9 +66,11 @@ object Filter {
 
   def exists(field: String) = Exists(field).value(_)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geo-bounding-box-filter.html */
   case class BoundedBox(
-    q: Query, _field: Option[String] = None,
-    _cache: Option[Boolean] = None,
+    q: Query,
+    _field: Option[String]         = None,
+    _cache: Option[Boolean]        = None,
     _box: Option[(String, String)] = None) extends Filter {
     def field(f: String) = copy(_field = Some(f))
     /** (topLeftLat, topLeftLon, bottomRightLat, bottomRightLon) */
@@ -87,6 +95,7 @@ object Filter {
 
   def boundedBox(q: Query) = BoundedBox(q).field(_)
 
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geo-distance-filter.html */
   case class GeoDistance(
     q: Query,
     _field: Option[String]         = None,
@@ -119,7 +128,7 @@ object Filter {
 
   def geodistance(q: Query) = GeoDistance(q).field(_)
 
-
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geo-distance-range-filter.html */
   case class GeoRange(
     q: Query,
     _field: Option[String]    = None,
@@ -143,5 +152,88 @@ object Filter {
            (fld -> _location)
          }.getOrElse(("x" -> None)))))
   }
+
   def georange(q: Query) = GeoRange(q).field(_)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geo-polygon-filter.html */
+  case class GeoPolygon(
+    q: Query,
+    _field: Option[String]  = None,
+    _points: List[String]   = Nil,
+    _cache: Option[Boolean] = None) extends Filter {
+    def cache(c: Boolean) = copy(_cache = Some(c))
+    def field(f: String) = copy(_field = Some(f))
+    def points(p: (Double, Double)*) =
+      copy(_points = p.toList.map {
+        case (lat, lon) => s"$lat, $lon"
+      })
+    def geohashes(h: String*) =
+      copy(_points = h.toList)
+    def point(p: (Double, Double)) =
+      copy(_points  = s"${p._1}, ${p._2}" :: _points)
+    def geohash(h: String) =
+      copy(_points  = h :: _points)
+    def asJson =
+      ("filtered" ->
+       ("query" -> q.asJson) ~
+       ("filter" ->
+        ("geo_polygon" ->
+         ("_cache" -> _cache) ~
+         _field.map { fld =>
+           (fld -> Some(("points" -> _points)))
+         }.getOrElse(("x" -> None)))))
+  }
+
+  def geoPolygon(q: Query) = GeoPolygon(q).field(_)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geo-shape-filter.html */
+  
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-geohash-cell-filter.html */
+  
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-child-filter.html */
+  case class HasChild(
+    typ: String,
+    _query: Option[Query],
+    _filter: Option[Filter]) extends Filter {
+    def query(q: Query) = copy(_query = Some(q))
+    def filter(f: Filter) = copy(_filter = Some(f))
+    def asJson =
+      ("has_child" ->
+       ("type" -> typ) ~
+       ("filter" -> _filter.map(_.asJson)) ~
+       ("query" -> _query.map(_.asJson)))
+  }
+
+  def hasChild(typ: String) = HasChild(tpe)
+
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-parent-filter.html */
+  case class HasParent(
+    typ: String,
+    _query: Option[Query],
+    _filter: Option[Filter]) extends Filter {
+    def query(q: Query) = copy(_query = Some(q))
+    def filter(f: Filter) = copy(_filter = Some(f))
+    def asJson =
+      ("has_parent" ->
+       ("type" -> typ) ~
+       ("filter" -> _filter.map(_.asJson)) ~
+       ("query" -> _query.map(_.asQuery)))
+  }
+
+  def hasParent(typ: String) = HasParent(typ)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-ids-filter.html#query-dsl-ids-filter */
+
+  case class Ids(
+    typ: String,
+    _ids: List[String] = Nil) extends Filter {
+    def ids(i: String*) = copy(_ids = i.toList)
+    def asJson =
+      ("ids" -> ("type" -> typ) ~ ("values" -> _id))
+  }
+
+  def ids(typ: String) = Ids(typ)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-indices-filter.html */
 }
