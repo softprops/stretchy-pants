@@ -1,5 +1,5 @@
 # stretchy pants
-
+o
 > An elastic wasteband for text
 
 Stretchy pants is a flexible non blocking interface for querying elastic search in scala.
@@ -14,6 +14,7 @@ The interface is currently a work in process
 import stretchypants._, dispatch._
 import scala.concurrent.ExecutionContext.Implicits.global
 import org.json4s.JsonDSL._
+import org.json4s.JValue
 import org.json4s.native.JsonMethods.{ compact, render }
 
 // initialize client
@@ -22,14 +23,17 @@ val es = Client(host)
 // initialize an indexer
 val tweeter = es.index("twitter", "tweet")
 
+// documents are serialized json strings
+def str(js: JValue) = compact(render(js))
+
 // create some tweets
-tweeter(compact(render(
+tweeter(str(
   ("content" -> "stretchy pants!") ~
-  ("user" -> ("name" -> "@stretchy"))))).id("1")(as.String).onComplete(println)
-tweeter(compact(render(("content" -> "stretchy") ~
-  ("user" -> ("name" -> "@pants"))))).id("2")(as.String).onComplete(println)
-tweeter(compact(render(("content" -> "pants") ~
-  ("user" -> ("name" -> "@pantz"))))).id("3")(as.String).onComplete(println)
+  ("user" -> ("name" -> "@stretchy")))).id("1")(as.String).onComplete(println)
+tweeter(str(("content" -> "stretchy") ~
+  ("user" -> ("name" -> "@pants")))).id("2")(as.String).onComplete(println)
+tweeter(str(("content" -> "pants") ~
+  ("user" -> ("name" -> "@pantz")))).id("3")(as.String).onComplete(println)
   
   
 // get tweets one by one
