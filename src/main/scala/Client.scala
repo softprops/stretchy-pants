@@ -32,10 +32,13 @@ case class Client(
     (implicit ec: ExecutionContext): Future[T] =
      http(req <:< Map("User-Agent" -> Client.Agent) > handler)
 
-  def complete(req: Req): Client.Completion = new Client.Completion {
-    override def apply[T](handler: Client.Handler[T])(implicit ec: ExecutionContext) =
-      request(req)(handler)
-  }
+  def complete(req: Req): Client.Completion =
+    new Client.Completion {
+      override def apply[T]
+      (handler: Client.Handler[T])
+      (implicit ec: ExecutionContext) =
+        request(req)(handler)
+    }
 
   object indices {
     def open(index: String) = complete(root.POST / index / "_open")
