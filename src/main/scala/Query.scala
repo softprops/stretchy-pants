@@ -149,7 +149,17 @@ object Query {
 
   def dismatched = Dismatched()
 
-  // todo: filtered
+  class Filtered(
+    q: Query,
+    _filter: Option[Filter]) extends Query {
+    def filter(f: Filter) = copy(_filter = Some(f))
+    def asJson =
+      ("filtered" ->
+       ("query" -> q.asJson) ~
+       ("filter" -> _filter.map(_.asJson)))
+  }
+
+  def filtered(q: Query) = Filtered(q)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-flt-query.html */
   case class FuzzyLikeThis(
@@ -570,5 +580,14 @@ object Query {
         ("value" -> _value) ~
         ("boost" -> _boost)))
   }
+
   def wildcard(field: String) = Wildcard(field)
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-minimum-should-match.html */
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-multi-term-rewrite.html */
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-template-query.html */
+
+  
 }
