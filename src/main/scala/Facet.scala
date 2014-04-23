@@ -2,6 +2,7 @@ package stretchypants
 
 import org.json4s.{ JArray, JString, JValue, JNothing, JInt, JObject }
 import org.json4s.JsonDSL._
+import scala.concurrent.duration.FiniteDuration
 
 sealed trait Facet {
   def asJson: JValue
@@ -75,11 +76,15 @@ object Facet {
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-range-facet.html */
   case class Range(
-    _field: Option[String]                    = None,
-    _keyValueFields: Option[(String, String)] = None,
+    _field: Option[String]                     = None,
+    _keyValueFields: Option[(String, String)]  = None,
     _keyValueScripts: Option[(String, String)] = None,
-    bounds: List[(Option[Int], Option[Int])] = Nil) extends Facet {
+    bounds: List[(Option[Int], Option[Int])]   = Nil) extends Facet {
     def field(f: String) = copy(_field = Some(f))
+    def keyValueFields(key: String, value: String) =
+      copy(_keyValueFields = Some(key, value))
+    def keyValueScripts(key: String, value: String) =
+      copy(_keyValueScripts = Some(key, value))
     def from(f: Int) = copy(bounds = (Some(f), None) :: bounds)
     def to(t: Int) = copy(bounds = (None, Some(t)) :: bounds)
     def range(f: Int, t: Int) = copy(bounds = (Some(f), Some(t)) :: bounds)
@@ -103,4 +108,45 @@ object Facet {
        }))
     }
   }
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-histogram-facet.html */
+  case class Histogram(
+    _field: Option[String]                     = None,
+    _keyValueFields: Option[(String, String)]  = None,
+    _keyValueScripts: Option[(String, String)] = None,
+    _scriptParams: Option[Map[String, String]] = None,
+    _interval: Option[Int]                     = None,
+    _timeInterval: Option[FiniteDuration]      = None) extends Facet {
+    def field(f: String) = copy(_field = Some(f))
+    def keyValueFields(key: String, value: String) =
+      copy(_keyValueFields = Some(key, value))
+    def keyValueScripts(key: String, value: String) =
+      copy(_keyValueScripts = Some(key, value))
+    def scriptParams(kv: (String, String)*) = copy(_scriptParams = Some(kv.toMap))
+    def interval(i: Int) = copy(_interval = Some(i))
+    def interval(d: FiniteDuration) = copy(_timeInterval = Some(d))
+    def asJson = {
+      ("histogram" ->
+        (_field.map { fld =>
+          (("field" -> fld) ~
+           ("interval" -> _interval)): JObject
+       }.orElse {
+        _keyValueFields.map {
+          case (k,v) =>
+            (("interval" -> _interval) ~
+             ("key_field"   -> k) ~
+             ("value_field" -> v): JObject)
+        }
+       }.orElse {
+        _keyValueScripts.map {
+          case (k,v) =>
+            (("interval" -> _interval) ~
+             ("key_script"   -> k) ~
+             ("value_script" -> k): JObject)
+        }
+       }))
+    }
+  }
+
+  def histogram = Histogram()
 }
