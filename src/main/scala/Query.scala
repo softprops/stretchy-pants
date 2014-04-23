@@ -149,9 +149,9 @@ object Query {
 
   def dismatched = Dismatched()
 
-  class Filtered(
+  case class Filtered(
     q: Query,
-    _filter: Option[Filter]) extends Query {
+    _filter: Option[Filter] = None) extends Query {
     def filter(f: Filter) = copy(_filter = Some(f))
     def asJson =
       ("filtered" ->

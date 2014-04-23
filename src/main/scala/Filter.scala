@@ -193,8 +193,8 @@ object Filter {
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-child-filter.html */
   case class HasChild(
     typ: String,
-    _query: Option[Query],
-    _filter: Option[Filter]) extends Filter {
+    _query: Option[Query]   = None,
+    _filter: Option[Filter] = None) extends Filter {
     def query(q: Query) = copy(_query = Some(q))
     def filter(f: Filter) = copy(_filter = Some(f))
     def asJson =
@@ -204,21 +204,21 @@ object Filter {
        ("query" -> _query.map(_.asJson)))
   }
 
-  def hasChild(typ: String) = HasChild(tpe)
+  def hasChild(typ: String) = HasChild(typ)
 
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl-has-parent-filter.html */
   case class HasParent(
     typ: String,
-    _query: Option[Query],
-    _filter: Option[Filter]) extends Filter {
+    _query: Option[Query]   = None,
+    _filter: Option[Filter] = None) extends Filter {
     def query(q: Query) = copy(_query = Some(q))
     def filter(f: Filter) = copy(_filter = Some(f))
     def asJson =
       ("has_parent" ->
        ("type" -> typ) ~
        ("filter" -> _filter.map(_.asJson)) ~
-       ("query" -> _query.map(_.asQuery)))
+       ("query" -> _query.map(_.asJson)))
   }
 
   def hasParent(typ: String) = HasParent(typ)
@@ -230,7 +230,7 @@ object Filter {
     _ids: List[String] = Nil) extends Filter {
     def ids(i: String*) = copy(_ids = i.toList)
     def asJson =
-      ("ids" -> ("type" -> typ) ~ ("values" -> _id))
+      ("ids" -> ("type" -> typ) ~ ("values" -> _ids))
   }
 
   def ids(typ: String) = Ids(typ)
