@@ -21,7 +21,7 @@ import org.json4s.native.JsonMethods.{ compact, render }
 val es = Client(host)
 
 // initialize an indexer
-val tweeter = es.index("twitter", "tweet")
+val tweeter = es.index("twitter", "tweet").doc(_)
 
 // documents are serialized json strings
 def str(js: JValue) = compact(render(js))
@@ -37,7 +37,7 @@ tweeter(str(("content" -> "pants") ~
   
   
 // get tweets one by one
-val tweeting = es.get("twitter", "tweet")
+val tweeting = es.get("twitter", "tweet").id(_)
 (1 to 3).foreach(id => tweeting(id.toString)(as.String).onComplete(println))
 
 // get multiple tweets in one swoop
@@ -65,7 +65,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 val es = Client(host)
 
 // initialize a search request
-val tweets = es.search("twitter", "tweet")
+val tweets = es.search("twitter", "tweet").query(_)
 
 // query all tweets
 tweets(Query.matchall)(as.String).onComplete(println)

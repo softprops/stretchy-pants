@@ -149,4 +149,48 @@ object Facet {
   }
 
   def histogram = Histogram()
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-date-histogram-facet.html#search-facets-date-histogram-facet */
+  case class DateHistogram(
+    _field: Option[String]       = None,
+    _keyField: Option[String]    = None,
+    _valueField: Option[String]  = None,
+    _valueScript: Option[String] = None,
+    _interval: Option[String]    = None) extends Facet {
+    def field(f: String) = copy(_field = Some(f))
+    def keyField(f: String) = copy(_keyField = Some(f))
+    def valueField(f: String) = copy(_valueField = Some(f))
+    def valueScript(s: String) = copy(_valueScript = Some(s))
+    def year = copy(_interval = Some("year"))
+    def quarter = copy(_interval = Some("quarter"))
+    def month = copy(_interval = Some("month"))
+    def week = copy(_interval = Some("week"))
+    def day = copy(_interval = Some("day"))
+    def hour = copy(_interval = Some("hour"))
+    def minute = copy(_interval = Some("minute"))
+    def second = copy(_interval = Some("second"))
+    def asJson =
+      ("date_histogram" ->
+       ("interval" -> _interval) ~
+       ("field" -> _field) ~
+       ("key_field" -> _keyField) ~
+       ("value_field" -> _valueField) ~
+       ("value_script" -> _valueScript))
+  }
+
+  def dateHistogram = DateHistogram()
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-filter-facet.html */
+  def filter(f: Filter) = new Facet {
+    def asJson = ("filter" -> f.asJson)
+  }
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-query-facet.html */
+  def query(q: Query) = new Facet {
+    def asJson = ("query" -> q.asJson)
+  }
+
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-statistical-facet.html */
+  
+  /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-facets-terms-stats-facet.html */
 }

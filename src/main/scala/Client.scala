@@ -148,11 +148,11 @@ case class Client(
   }
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-index_.html */
-  def index(index: String, kind: String) = Indexer(index, kind).doc(_)
+  def index(index: String, kind: String) = Indexer(index, kind)
 
   case class Get(
     index: String, kind: String,
-    _id: Option[String] = None,
+    _id: Option[String]      = None,
     _realtime: Boolean       = true,
     _source: Boolean         = true,
     _include: Option[String] = None,
@@ -172,24 +172,27 @@ case class Client(
     def refresh(r: Boolean) = copy(_refresh = r)
     def fields(fs: String*) = copy(_fields = fs.toList)
 
-    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) =
+    def apply[T]
+      (hand: Client.Handler[T])
+      (implicit ec: ExecutionContext) =
       _id.map( id =>
-        request(root / index / kind / id <<? Map.empty[String, String] ++
-                Some("false").filter(Function.const(!_realtime)).map("realtime" -> _) ++
-                Some("false").filter(Function.const(!_source)).map("_source" -> _) ++
-                _include.map("_source_include" -> _) ++
-                _exclude.map("_source_exclude" -> _) ++
-                Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
-                _routing.map("routing" -> _) ++
-                _preference.map("preference" -> _.value) ++
-                Some("true").filter(Function.const(_refresh)).map("refresh" -> _))(hand)).getOrElse(
-                  Future.failed(new IllegalArgumentException("id is required"))
-                )
+        request(
+          root / index / kind / id <<? Map.empty[String, String] ++
+          Some("false").filter(Function.const(!_realtime)).map("realtime" -> _) ++
+          Some("false").filter(Function.const(!_source)).map("_source" -> _) ++
+          _include.map("_source_include" -> _) ++
+          _exclude.map("_source_exclude" -> _) ++
+          Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
+          _routing.map("routing" -> _) ++
+          _preference.map("preference" -> _.value) ++
+          Some("true").filter(Function.const(_refresh)).map("refresh" -> _))(hand)).getOrElse(
+            Future.failed(new IllegalArgumentException("id is required"))
+          )
 
   }
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-get.html */
-  def get(index: String, kind: String) = Get(index, kind).id(_)
+  def get(index: String, kind: String) = Get(index, kind)
 
   object MultiGet {
     case class Doc(
@@ -223,7 +226,9 @@ case class Client(
     def docs(ds: MultiGet.Doc*) = copy(_docs = ds.toList)
     def ids(ids: String*) = copy(_ids = ids.toList)
 
-    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+    def apply[T]
+      (hand: Client.Handler[T])
+      (implicit ec: ExecutionContext) = {
       val endpoint = (_index, _kind) match {
         case (None, None)              => root
         case (None, Some(kind))        => root / "_all" / kind // don't think this is right
@@ -274,7 +279,7 @@ case class Client(
   }
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-delete.html */
-  def delete(index: String, kind: String) = Delete(index, kind).id(_)
+  def delete(index: String, kind: String) = Delete(index, kind)
 
   /** http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-update.html */
   def update(
@@ -301,7 +306,9 @@ case class Client(
     def defaultField(df: String) = copy(_defaultField = Some(df))
     def analyzer(a: String) = copy(_analyzer = Some(a))
     def defaultOperator(op: String) = copy(_defaultOperator = Some(op))
-    def apply[T](hand: Client.Handler[T])(implicit ec: ExecutionContext) = {
+    def apply[T]
+      (hand: Client.Handler[T])
+      (implicit ec: ExecutionContext) = {
       val endpoint = (_index, _kind) match {
         case (Nil, Nil) => root / "_all"
         case (Nil, kinds) => root / "_all" / kinds.mkString(",")
@@ -310,12 +317,13 @@ case class Client(
       }
       val body = compact(render(("query" -> _q.asJson)))
       println(s"delete query body $body ${endpoint.toRequest.getUrl}")
-      request(endpoint.DELETE / "_query"
-              <<? Map.empty[String, String] ++
-                _defaultField.map("df" -> _) ++
-                _analyzer.map("analyzer" -> _) ++
-                _defaultOperator.map("default_operator" -> _)
-              << body)(hand)
+      request(
+        endpoint.DELETE / "_query"
+        <<? Map.empty[String, String] ++
+          _defaultField.map("df" -> _) ++
+          _analyzer.map("analyzer" -> _) ++
+          _defaultOperator.map("default_operator" -> _)
+        << body)(hand)
     }
   }
 
@@ -395,33 +403,34 @@ case class Client(
             case (indexes, Nil) => root / indexes.mkString(",")
             case (indexes, kinds) => root / indexes.mkString(",") / kinds.mkString(",")
           }
-          request(endpoint / "_search"
-                  <<? Map.empty[String, String] ++
-                    _q.map("q" -> _) ++
-                    _defaultField.map("df" -> _) ++
-                    _analyzer.map("analyzer" -> _) ++
-                    _defaultOperator.map("default_operator" -> _) ++
-                    _explain.map("explain" -> _.toString) ++
-                    _source.map("_source" -> _.toString) ++
-                    _sourceInclude.map("_source_include" -> _) ++
-                    _sourceExclude.map("_source_exclude" -> _) ++
-                    Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
-                    Some(_sort).filter(_.nonEmpty).map("sort" -> _.mkString(",")) ++
-                    _trackScores.map("track_scores" -> _.toString) ++
-                    _timeout.map("timeout" -> _.toMillis.toString) ++
-                    _from.map("from" -> _.toString) ++
-                    _size.map("size" -> _.toString) ++
-                    _searchType.map("search_type" -> _.value) ++
-                    _lowercaseExpandedTerms.map("lowercase_expanded_terms" -> _.toString) ++
-                    _analyzeWildcard.map("analyze_wildcard" -> _.toString) ++
-                    _routing.map("routing" -> _))(hand)
+          request(
+            endpoint / "_search"
+            <<? Map.empty[String, String] ++
+              _q.map("q" -> _) ++
+              _defaultField.map("df" -> _) ++
+              _analyzer.map("analyzer" -> _) ++
+              _defaultOperator.map("default_operator" -> _) ++
+              _explain.map("explain" -> _.toString) ++
+              _source.map("_source" -> _.toString) ++
+              _sourceInclude.map("_source_include" -> _) ++
+              _sourceExclude.map("_source_exclude" -> _) ++
+              Some(_fields).filter(_.nonEmpty).map("fields" -> _.mkString(",")) ++
+              Some(_sort).filter(_.nonEmpty).map("sort" -> _.mkString(",")) ++
+              _trackScores.map("track_scores" -> _.toString) ++
+              _timeout.map("timeout" -> _.toMillis.toString) ++
+              _from.map("from" -> _.toString) ++
+              _size.map("size" -> _.toString) ++
+              _searchType.map("search_type" -> _.value) ++
+              _lowercaseExpandedTerms.map("lowercase_expanded_terms" -> _.toString) ++
+              _analyzeWildcard.map("analyze_wildcard" -> _.toString) ++
+              _routing.map("routing" -> _))(hand)
               }.getOrElse(
                 Future.failed(new IllegalArgumentException("id is required"))
               )
     }
 
   /** query is expected to be in the form field:value or just value with df=field */
-  def uriSearch = URISearch().query(_)
+  def uriSearch = URISearch()
 
   case class Search
     (_index: String,
@@ -490,5 +499,5 @@ case class Client(
        )
   }
 
-  def search(index: String, kind: String) = Search(index, kind).query(_)
+  def search(index: String, kind: String) = Search(index, kind)
 }

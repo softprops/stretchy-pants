@@ -15,15 +15,15 @@ class ClientSpec extends FunSpec {
 
     it ("should provide doc interfaces") {
       val es = Client()
-      val tweeter = es.index("twitter", "tweet")
-      val tweeting = es.get("twitter", "tweet")
-      val detweet = es.delete("twitter", "tweeti")
+      val tweeter = es.index("twitter", "tweet").timeout(1.second).doc(_)
+      val tweeting = es.get("twitter", "tweet").id(_)
+      val detweet = es.delete("twitter", "tweeti").timeout(1.second).id(_)
       val f = for {
         put <- tweeter(str(
           ("content" -> "stretchy pants!") ~
-          ("user" -> ("name" -> "@stretchy")))).id("1").timeout(1 second)(as.String)
+          ("user" -> ("name" -> "@stretchy")))).id("1")(as.String)
         get <- tweeting("1")(as.String)
-        del <- detweet("1").timeout(1 second)(as.String)
+        del <- detweet("1")(as.String)
       } yield {
         println(put)
         println(get)
